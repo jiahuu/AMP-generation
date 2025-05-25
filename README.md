@@ -4,15 +4,23 @@ AI-mediated strategy for Development of Antimicrobial Peptide for  Anti-infectio
 ## 1. AMP generation
 
 ### Training
-` python `
+```
+python
+```
 
 ### Generation
-`python generation.py`
+```
+python generation.py
+```
 
 ## 2. AMP discrimination
 
 ### Training
-`python MCL-AMP.py`
+```
+python MCL-AMP.py
+```
 
 ### Inference
-`python MCL-AMP-prediction.py`
+```
+python MCL-AMP-prediction.py
+```
