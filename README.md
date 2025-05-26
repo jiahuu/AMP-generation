@@ -1,11 +1,15 @@
-# AMP-generation
+# AMP-design
 AI-mediated strategy for Development of Antimicrobial Peptide for  Anti-infection
+<div align=center><img src=workflow.png></div>
 
-## 1. AMP generation
+## Preperation
+
+
+## AMP generation
 
 ### Training
 ```
-python
+python soft-prompt-tune.py
 ```
 
 ### Generation
@@ -13,7 +17,7 @@ python
 python generation.py
 ```
 
-## 2. AMP discrimination
+## AMP discrimination
 
 ### Training
 ```

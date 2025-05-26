@@ -1,8 +1,10 @@
 import torch
 import torch.nn as nn
+import pandas as pd
 import torch.nn.functional as F
 from transformers import EsmTokenizer, EsmModel
 from torch.nn.utils.rnn import pad_sequence
+from torch.utils.data import Dataset,DataLoader
 
 
 class MLPExpert(nn.Module):
@@ -113,6 +115,17 @@ def confident_hinge_loss(preds, labels, weights, alpha=1.0, beta=0.05):
     confidence_penalty = confidence_penalty / len(labels)
     return oracle_loss + alpha * confidence_penalty
 
+class SequenceDataset(Dataset):
+    def __init__(self, sequences, labels):
+        self.sequences = sequences
+        self.labels = labels
+
+    def __len__(self):
+        return len(self.sequences)
+
+    def __getitem__(self, idx):
+        return self.sequences[idx], self.labels[idx]
+
 
 def extract_esm2_embeddings(sequences, model_name="facebook/esm2_t33_650M_UR50D"):
     tokenizer = EsmTokenizer.from_pretrained(model_name)
@@ -147,35 +160,29 @@ def train_model(model, dataloader, optimizer, device):
         total_loss += loss.item()
     return total_loss / len(dataloader)
 
-
+epochs = 100
+batch_size = 128
+learning_rate = 1e-4
 
 if __name__ == "__main__":
-    model = MCLAMPClassifier(embedding_dim=1280, hidden_dim=256).to("cuda")
-    optimizer = torch.optim.Adam(model.parameters(), lr=1e-4)
-
-    # Dummy example for illustration
-    sequences = ["GWLNKKIKKAWRKFHEIFSK", "MKWVTFISLLFLFSSAYSRGVFRRDTHKSEIAHRFKDLGE"]
-    labels = torch.tensor([1, 0])
-    from torch.utils.data import DataLoader, TensorDataset
-
-    class SequenceDataset(torch.utils.data.Dataset):
-        def __init__(self, sequences, labels):
-            self.sequences = sequences
-            self.labels = labels
-
-        def __len__(self):
-            return len(self.sequences)
-
-        def __getitem__(self, idx):
-            return self.sequences[idx], self.labels[idx]
+    df = pd.read_csv("dataset.csv")
+    sequences = df["sequence"].tolist()
+    labels = torch.tensor(df["label"].tolist())
 
     dataset = SequenceDataset(sequences, labels)
-    dataloader = DataLoader(dataset, batch_size=2, shuffle=True)
+    total_len = len(dataset)
+    train_len = int(total_len * 0.7)
+    val_len = int(total_len * 0.15)
+    test_len = total_len - train_len - val_len
+    train_set, val_set, test_set = random_split(dataset, [train_len, val_len, test_len])
 
-    for epoch in range(3):
-        avg_loss = train_model(model, dataloader, optimizer, device="cuda")
+    train_loader = DataLoader(train_set, batch_size=batch_size, shuffle=True)
+    val_loader = DataLoader(val_set, batch_size=batch_size)
+    test_loader = DataLoader(test_set, batch_size=batch_size)
+
+    model = MCLAMPClassifier(embedding_dim=1280, hidden_dim=256).to("cuda")
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+    for epoch in range(epochs):
+        avg_loss = train_model(model, train_loader, optimizer, device="cuda")
         print(f"Epoch {epoch+1}, Loss: {avg_loss:.4f}")
-
-    preds = predict(model, sequences, device="cuda")
-    print("Predictions:", preds)
-

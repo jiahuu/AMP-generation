@@ -17,7 +17,7 @@ def extract_esm2_embeddings(sequences, model_name="facebook/esm2_t33_650M_UR50D"
     return pad_sequence(valid_embeddings, batch_first=True)
 
 
-def predict(model, sequences, device="cpu"):
+def predict(model, sequences, device="cuda"):
     model.eval()
     embeddings = extract_esm2_embeddings(sequences).to(device)
     with torch.no_grad():
