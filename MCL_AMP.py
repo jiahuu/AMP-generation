@@ -4,7 +4,9 @@ import pandas as pd
 import torch.nn.functional as F
 from transformers import EsmTokenizer, EsmModel
 from torch.nn.utils.rnn import pad_sequence
-from torch.utils.data import Dataset,DataLoader
+from torch.utils.data import Dataset,DataLoader,random_split
+import matplotlib.pyplot as plt
+from sklearn.metrics import confusion_matrix, matthews_corrcoef
 
 
 class MLPExpert(nn.Module):
@@ -19,6 +21,7 @@ class MLPExpert(nn.Module):
         self.classifier = nn.Linear(hidden_dim, 1)
 
     def forward(self, x):
+        x = x.mean(dim=1)
         feat = self.encoder(x)
         out = self.classifier(feat)
         return torch.sigmoid(out).squeeze(), feat
@@ -127,12 +130,12 @@ class SequenceDataset(Dataset):
         return self.sequences[idx], self.labels[idx]
 
 
-def extract_esm2_embeddings(sequences, model_name="facebook/esm2_t33_650M_UR50D"):
+def extract_esm2_embeddings(sequences, model_name="facebook/esm2_t33_650M_UR50D", max_len=30):
     tokenizer = EsmTokenizer.from_pretrained(model_name)
     esm_model = EsmModel.from_pretrained(model_name)
     esm_model.eval()
 
-    batch = tokenizer(sequences, return_tensors="pt", padding=True, truncation=True)
+    batch = tokenizer(sequences, return_tensors="pt", padding=True, truncation=True, max_length=max_len)
     with torch.no_grad():
         outputs = esm_model(**batch)
         embeddings = outputs.last_hidden_state
@@ -141,9 +144,14 @@ def extract_esm2_embeddings(sequences, model_name="facebook/esm2_t33_650M_UR50D"
     valid_embeddings = []
     for i in range(len(sequences)):
         seq_len = input_mask[i].sum().item()
-        valid_embeddings.append(embeddings[i, 1:seq_len-1])  # remove CLS/EOS
+        valid_embed = embeddings[i, 1:seq_len-1]  # remove CLS/EOS
+        pad_len = max_len - valid_embed.size(0)
+        pad_tensor = torch.zeros(pad_len, valid_embed.size(1))  # [pad_len, 1280]
+        valid_embed = torch.cat([valid_embed, pad_tensor], dim=0)
 
-    return pad_sequence(valid_embeddings, batch_first=True)  # [B, max_len, 1280]
+        valid_embeddings.append(valid_embed)
+
+    return torch.stack(valid_embeddings)
 
 
 def train_model(model, dataloader, optimizer, device):
@@ -161,13 +169,39 @@ def train_model(model, dataloader, optimizer, device):
     return total_loss / len(dataloader)
 
 epochs = 100
-batch_size = 128
+batch_size = 256
 learning_rate = 1e-4
+
+def evaluate_metrics(model, dataloader, device="cuda"):
+    model.eval()
+    all_preds = []
+    all_labels = []
+    total_loss = 0
+
+    with torch.no_grad():
+        for sequences, labels in dataloader:
+            embeddings = extract_esm2_embeddings(sequences).to(device)
+            labels = labels.to(device)
+            preds, weights = model(embeddings)  # ✅ 只取预测结果
+            loss = confident_hinge_loss(preds, labels, weights)  # 与训练一致
+            total_loss += loss.item()
+            pred_labels = (preds > 0.5).long()  # ✅ 二分类，0/1 预测
+            all_preds.extend(pred_labels.cpu().tolist())
+            all_labels.extend(labels.cpu().tolist())
+
+    tn, fp, fn, tp = confusion_matrix(all_labels, all_preds).ravel()
+    acc = (tp + tn) / (tp + tn + fp + fn)
+    sn = tp / (tp + fn) if (tp + fn) > 0 else 0
+    sp = tn / (tn + fp) if (tn + fp) > 0 else 0
+    mcc = matthews_corrcoef(all_labels, all_preds)
+
+    return total_loss/len(dataloader), acc, sn, sp, mcc
+
 
 if __name__ == "__main__":
     df = pd.read_csv("dataset.csv")
-    sequences = df["sequence"].tolist()
-    labels = torch.tensor(df["label"].tolist())
+    sequences = df["Seq"].tolist()
+    labels = torch.tensor(df["Label"].tolist())
 
     dataset = SequenceDataset(sequences, labels)
     total_len = len(dataset)
@@ -183,6 +217,51 @@ if __name__ == "__main__":
     model = MCLAMPClassifier(embedding_dim=1280, hidden_dim=256).to("cuda")
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
 
+    train_losses = []
+    val_losses = []
+    best_val_loss = 1.0
+
+    patience = 10
+    patience_counter = 0
+
     for epoch in range(epochs):
-        avg_loss = train_model(model, train_loader, optimizer, device="cuda")
-        print(f"Epoch {epoch+1}, Loss: {avg_loss:.4f}")
+        train_loss = train_model(model, train_loader, optimizer, device="cuda")
+        train_losses.append(train_loss)
+        val_loss, _, _, _, _ = evaluate_metrics(model, val_loader, device="cuda")
+        val_losses.append(val_loss)
+
+        print(f"Epoch {epoch+1}, train_Loss: {train_loss:.4f}, val_Loss: {val_loss:.4f}")
+
+        # Early stopping
+        if val_loss < best_val_loss:
+            best_val_loss = val_loss
+            patience_counter = 0
+            torch.save(model.state_dict(), "best_model.pt")
+        else:
+            patience_counter += 1
+            if patience_counter >= patience:
+                print("Early stopping triggered.")
+                break
+
+    plt.figure(figsize=(12, 6))
+    plt.subplot(1, 2, 1)
+    plt.plot(train_losses, label="Train Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("Training Loss")
+    plt.legend()
+
+    plt.subplot(1, 2, 2)
+    plt.plot(val_losses, label="Val Loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.title("Validation Loss")
+    plt.legend()
+
+    plt.tight_layout()
+    plt.savefig("training_plot.png")
+    plt.show()
+
+    model.load_state_dict(torch.load("best_model.pt"))
+    _, test_acc, test_sn, test_sp, test_mcc = evaluate_metrics(model, test_loader, device="cuda")
+    print(f"Test Acc: {test_acc:.4f}, Sn: {test_sn:.4f}, Sp: {test_sp:.4f}, MCC: {test_mcc:.4f}")

@@ -1,0 +1,32 @@
+[2025-08-01 19:45:50] - INFO:  ### Print the current configuration to a log file 
+[2025-08-01 19:45:50] - INFO: ###  project_dir = /Users/test/Desktop/代码/AMP-generation
+[2025-08-01 19:45:50] - INFO: ###  model_name_or_path = /Users/test/Desktop/代码/AMP-generation/ProtGPT2
+[2025-08-01 19:45:50] - INFO: ###  tokenizer_name_or_path = /Users/test/Desktop/代码/AMP-generation/ProtGPT2
+[2025-08-01 19:45:50] - INFO: ###  train_path = /Users/test/Desktop/代码/AMP-generation/data/train_amp.csv
+[2025-08-01 19:45:50] - INFO: ###  test_path = /Users/test/Desktop/代码/AMP-generation/data/test_amp.csv
+[2025-08-01 19:45:50] - INFO: ###  num_virtual_tokens = 20
+[2025-08-01 19:45:50] - INFO: ###  peft_config = PromptTuningConfig(task_type=<TaskType.CAUSAL_LM: 'CAUSAL_LM'>, peft_type=<PeftType.PROMPT_TUNING: 'PROMPT_TUNING'>, auto_mapping=None, base_model_name_or_path=None, revision=None, inference_mode=False, num_virtual_tokens=20, token_dim=None, num_transformer_submodules=None, num_attention_heads=None, num_layers=None, prompt_tuning_init='RANDOM', prompt_tuning_init_text=None, tokenizer_name_or_path='/Users/test/Desktop/代码/AMP-generation/ProtGPT2', tokenizer_kwargs=None)
+[2025-08-01 19:45:50] - INFO: ###  task_type = soft
+[2025-08-01 19:45:50] - INFO: ###  text_column = Sequence
+[2025-08-01 19:45:50] - INFO: ###  max_length = 128
+[2025-08-01 19:45:50] - INFO: ###  lr = 0.0001
+[2025-08-01 19:45:50] - INFO: ###  num_epochs = 200
+[2025-08-01 19:45:50] - INFO: ###  batch_size = 16
+[2025-08-01 19:45:50] - INFO: ###  random_seed = 42
+[2025-08-01 19:45:50] - INFO: ###  model_save_dir = /Users/test/Desktop/代码/AMP-generation/cache/soft
+[2025-08-01 19:45:50] - INFO: ###  logs_save_dir = /Users/test/Desktop/代码/AMP-generation/logs/soft
+[2025-08-01 19:45:50] - INFO: ###  device = cpu
+[2025-08-01 19:45:50] - INFO: ###  writer = <torch.utils.tensorboard.writer.SummaryWriter object at 0x1054c6e30>
+[2025-08-01 19:45:52] - INFO: check the info about dataset
+[2025-08-01 19:45:52] - INFO: DatasetDict({
+    train: Dataset({
+        features: ['Sequence'],
+        num_rows: 3598
+    })
+    test: Dataset({
+        features: ['Sequence'],
+        num_rows: 900
+    })
+})
+[2025-08-01 19:45:52] - INFO: {'Sequence': 'FIHHIVHAIGRLF'}
+[2025-08-01 19:45:52] - INFO: {'Sequence': 'KKLKLALAKPALLWKALALKLKKA'}

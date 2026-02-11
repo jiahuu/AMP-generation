@@ -1,7 +1,7 @@
 import sys
 sys.path.append('../')
 from transformers import AutoModelForCausalLM
-from peft import get_peft_config, get_peft_model, PrefixTuningConfig, PeftType
+from peft import get_peft_config, get_peft_model, PromptTuningConfig, TaskType, PeftType
 import torch
 from datasets import load_dataset
 import os
@@ -17,28 +17,33 @@ from utils.log_helper import logger_init
 from utils.set_seed import set_seed
 import time
 
+# before run this code, you should download ProtGPT2 model!!
 
 class TrainConfig:
     def __init__(self):
         
-        self.project_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        self.project_dir = os.path.dirname(os.path.abspath(__file__))
         self.model_name_or_path =  os.path.join(self.project_dir, 'ProtGPT2') 
         self.tokenizer_name_or_path = os.path.join(self.project_dir, 'ProtGPT2') 
         self.train_path = os.path.join(self.project_dir, 'data', 'train_amp.csv')
         self.test_path = os.path.join(self.project_dir, 'data', 'test_amp.csv')
         self.num_virtual_tokens = 20 
-        self.peft_config = PromptTuningConfig(task_type=TaskType.CAUSAL_LM, num_virtual_tokens=self.num_virtual_tokens)
-        self.task_type = 'prefix'   # prefix / finetune
+        self.peft_config = PromptTuningConfig(
+            task_type=TaskType.CAUSAL_LM, 
+            num_virtual_tokens=self.num_virtual_tokens,
+            tokenizer_name_or_path=self.tokenizer_name_or_path,
+            prompt_tuning_init="RANDOM",)
+        self.task_type = 'soft'   # prefix / finetune
         self.text_column = "Sequence"
 
-        self.max_length = 200 
-        self.lr = 1e-6   
-        self.num_epochs = 100
+        self.max_length = 128
+        self.lr = 1e-4
+        self.num_epochs = 200
         self.batch_size = 16
         self.random_seed = 42
 
-        self.model_save_dir = os.path.join(self.project_dir, 'cache', f'{self.dataset_name}', f'{self.task_type}')
-        self.logs_save_dir = os.path.join(self.project_dir, 'logs', f'{self.dataset_name}', f'{self.task_type}')
+        self.model_save_dir = os.path.join(self.project_dir, 'cache', f'{self.task_type}')
+        self.logs_save_dir = os.path.join(self.project_dir, 'logs', f'{self.task_type}')
 
         self.device = torch.device('cuda:3' if torch.cuda.is_available() else 'cpu')
         
@@ -49,8 +54,8 @@ class TrainConfig:
             os.makedirs(self.logs_save_dir)
 
 
-        self.writer = SummaryWriter(f"runs/{self.dataset_name}/ploysche_{self.peft_config.peft_type}_{self.peft_config.task_type}_E{self.num_epochs}_LR{self.lr}_BS{self.batch_size}_ML{self.max_length}_VT{self.num_virtual_tokens}")  
-        logger_init(log_file_name=f"ploysche_{self.dataset_name}_E{self.num_epochs}_LR{self.lr}_BS{self.batch_size}_ML{self.max_length}_VT{self.num_virtual_tokens}", log_level=logging.INFO, log_dir=self.logs_save_dir)
+        self.writer = SummaryWriter(f"runs/ploysche_{self.peft_config.peft_type}_{self.peft_config.task_type}_E{self.num_epochs}_LR{self.lr}_BS{self.batch_size}_ML{self.max_length}_VT{self.num_virtual_tokens}")  
+        logger_init(log_file_name=f"ploysche_E{self.num_epochs}_LR{self.lr}_BS{self.batch_size}_ML{self.max_length}_VT{self.num_virtual_tokens}", log_level=logging.INFO, log_dir=self.logs_save_dir)
 
         logging.info(" ### Print the current configuration to a log file ")
         for key, value in self.__dict__.items():
@@ -134,12 +139,13 @@ def train(config):
     eval_dataloader = DataLoader(eval_dataset, collate_fn=default_data_collator, batch_size=config.batch_size, pin_memory=True)
 
     # creating model
-    model = AutoModelForCausalLM.from_pretrained(config.model_name_or_path)
-    model = get_peft_model(model, config.peft_config)
-    model.print_trainable_parameters()
+    if config.task_type == 'soft':
+        model = AutoModelForCausalLM.from_pretrained(config.model_name_or_path)
+        model = get_peft_model(model, config.peft_config)
+        model.print_trainable_parameters()
 
     logging.info(model)
-    if config.task_type == 'prefix':
+    if config.task_type == 'soft':
         logging.info(model.peft_config)
 
     # model
@@ -167,7 +173,6 @@ def train(config):
 
             loss.backward()
             optimizer.step()
-            lr_scheduler.step()
             optimizer.zero_grad()
 
             config.writer.add_scalar('train_b/Loss', loss.item(), global_iter_num)
@@ -199,7 +204,7 @@ def train(config):
     logging.info(f'The sum time of training {time_sum}')
 
     # saving model
-    peft_model_id = config.model_save_dir + f"/prefix_{config.peft_config.peft_type}_{config.peft_config.task_type}_E{config.num_epochs}_LR{config.lr}_BS{config.batch_size}_ML{config.max_length}_VT{config.num_virtual_tokens}"
+    peft_model_id = config.model_save_dir + f"/soft_prompt_{config.peft_config.peft_type}_{config.peft_config.task_type}_E{config.num_epochs}_LR{config.lr}_BS{config.batch_size}_ML{config.max_length}_VT{config.num_virtual_tokens}"
     model.save_pretrained(peft_model_id)
 
 

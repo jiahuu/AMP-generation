@@ -10,12 +10,11 @@ from tqdm import tqdm
 import os
 set_seed(42)
 
-dir_path = os.getcwd()
-project_dir_path = os.path.dirname(dir_path)
+project_dir_path = os.getcwd()
 
 device = "cuda:3"
-peft_model_id = f"prefix_PREFIX_TUNING_CAUSAL_LM_E100_LR0.001_BS32_ML200_VT20"
-peft_model_path = project_dir_path + f"/generate/{task_type}/prefix/{peft_model_id}"
+peft_model_id = f"soft_prompt_PROMPT_TUNING_CAUSAL_LM_E200_LR0.0001_BS16_ML128_VT20"
+peft_model_path = project_dir_path + f"/cache/soft/{peft_model_id}"
 
 
 config = PeftConfig.from_pretrained(peft_model_path)
@@ -32,7 +31,7 @@ inputs = tokenizer(input_p, return_tensors="pt")
 seq_list = list()
 
 with torch.no_grad():
-    gen_seq_num = 2000 
+    gen_seq_num = 1000 
     batch_size= 50
     seq_list = list()
     for i in tqdm(range(int(gen_seq_num/batch_size))):
@@ -46,4 +45,4 @@ with torch.no_grad():
         outputs = model.generate(input_ids=inputs["input_ids"], attention_mask=inputs["attention_mask"], max_length=8, do_sample=True, top_k=500, repetition_penalty=1.2, num_return_sequences=remain_seq_num, eos_token_id=0)
         seq_list += seq_res
 
-    np.save(dir_path + f'/Allalpha/{peft_model_id}_mxlen500.npy', seq_list)
+    np.save(project_dir_path + f'/designed_amp_mxlen30.npy', seq_list)

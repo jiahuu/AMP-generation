@@ -1,7 +1,7 @@
 import torch
 from transformers import EsmTokenizer, EsmModel
 from torch.nn.utils.rnn import pad_sequence
-from model import MCLAMPClassifier
+from MCL_AMP import MCLAMPClassifier
 
 
 def extract_esm2_embeddings(sequences, model_name="facebook/esm2_t33_650M_UR50D"):
@@ -26,11 +26,11 @@ def predict(model, sequences, device="cuda"):
 
 
 if __name__ == "__main__":
-    sequences = ["GWLNKKIKKAWRKFHEIFSK", "MKWVTFISLLFLFSSAYSRGVFRRDTHKSEIAHRFKDLGE"]
+    sequences = ["YRGIRGKGWWKAAKAALKAVSSAAKH","GLFKIFKKSVKHACKKKK","GIKGALKSILFAL","FFPIIARLAAKVIPSLVRAVTKKC","IKHWKKVWKHAKKVL","WFIIWHWRKIPPK","ATFKRCRRWKKALHACRR"]
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = MCLAMPClassifier(embedding_dim=1280, hidden_dim=256).to(device)
-    model.load_state_dict(torch.load("mcl_amp_model.pt", map_location=device))
+    model.load_state_dict(torch.load("best_model.pt", map_location=device))
 
     predictions, confidences = predict(model, sequences, device)
     for seq, pred, conf in zip(sequences, predictions, confidences):
-        print(f"Sequence: {seq}\nPrediction: {pred:.4f}\nExpert Confidences: {conf.tolist()}\n")
+        print(f"Sequence: {seq}\nPrediction: {pred:.4f}\n")
